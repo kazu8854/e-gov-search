@@ -1,24 +1,25 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "🔨 Building Next.js standalone..."
-npm run build
+echo "🔨 Building Next.js static export..."
 
-echo "📦 Packaging for Lambda..."
-rm -rf .lambda-package
-mkdir -p .lambda-package
+# static export 時は API routes を一時退避（static exportではAPIルート非対応）
+mv src/app/api src/app/_api_backup 2>/dev/null || true
 
-# standalone 出力をコピー
-cp -r .next/standalone/. .lambda-package/
-cp -r .next/static .lambda-package/.next/static
+STATIC_EXPORT=true npm run build || {
+  # 失敗時もAPIルートを復元
+  mv src/app/_api_backup src/app/api 2>/dev/null || true
+  exit 1
+}
 
-# Lambda ハンドラーをコピー
-cp server-handler.js .lambda-package/
+# APIルートを復元
+mv src/app/_api_backup src/app/api 2>/dev/null || true
 
-# public ディレクトリがあればコピー
-if [ -d "public" ]; then
-  cp -r public .lambda-package/public
-fi
+echo "✅ Static export created at out/"
+echo "   Size: $(du -sh out | cut -f1)"
 
-echo "✅ Lambda package created at .lambda-package/"
-echo "   Size: $(du -sh .lambda-package | cut -f1)"
+echo ""
+echo "📦 Lambda functions are at lambda/"
+echo "   To deploy: cd cdk && npx cdk deploy"
+
+

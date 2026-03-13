@@ -109,45 +109,65 @@ src/
     └── index.ts               # 型定義
 ```
 
-## AWSサーバレスデプロイ（CDK）
+## AWSサーバレスデプロイ（イベントドリブン構成）
 
-AWS CDKを使って完全サーバレスで本番デプロイできます。
+完全サーバレス＋イベントドリブンなAWS構成をCDKで構築できます。
 
 ### アーキテクチャ
 
 ```
-ユーザー
+ブラウザ（静的HTML/JS）
+  ↕ WebSocket
+API Gateway WebSocket API
+  ↕
+Lambda（接続管理）→ DynamoDB（接続情報）
   ↓
-CloudFront（CDN + HTTPS）
-  ├── /_next/static/* → S3バケット（静的アセット）
-  └── /* → Lambda Function URL（Next.js SSR + API）
-              ↓
-          Secrets Manager（OPENAI_API_KEY）
+Step Functions（探索オーケストレーション）
+  ├── Phase 1: クエリ分析 Lambda（OpenAI）
+  ├── Phase 2: 法令検索 Lambda × N（Map並列、e-Gov API）
+  ├── Phase 3: 関連度判定 Lambda（OpenAI）
+  ├── Phase 4: 条文深掘り Lambda × N（Map並列、e-Gov API + OpenAI）
+  └── Phase 5: 結論生成 Lambda（OpenAI GPT-4o）
+  ↓ 各ステップ完了時
+Lambda → API Gateway Management API → ブラウザにリアルタイム通知
 ```
+
+### AWSリソース一覧
 
 | リソース | 用途 |
 |----------|------|
-| CloudFront | CDN配信、HTTPS、セキュリティヘッダー |
-| S3 | 静的アセット（JS/CSS）配信 |
-| Lambda Function URL | Next.js SSR & APIハンドラー（SSEストリーミング対応） |
-| Secrets Manager | OpenAI APIキーの安全な管理 |
+| **API Gateway WebSocket** | ブラウザとの双方向リアルタイム通信 |
+| **Step Functions** | 探索フローのオーケストレーション（可視化） |
+| **Lambda × 7** | 接続管理(2) + 探索開始(1) + 各Phase(5) |
+| **DynamoDB** | WebSocket接続情報管理（TTL付き） |
+| **CloudFront + S3** | 静的フロントエンド配信 |
+| **Secrets Manager** | OpenAI APIキー管理 |
+
+### イベントドリブンの利点
+
+1. **各ステップが独立したLambda** → 個別にスケール・リトライ可能
+2. **Step Functionsで可視化** → AWSコンソールでワークフロー進行が見える
+3. **Map状態で並列検索** → 複数キーワードを同時に検索して高速化
+4. **フロントエンドは完全静的** → S3+CloudFrontのみ、サーバー不要
+5. **WebSocketでリアルタイム配信** → Lambda完了ごとに即座にブラウザへプッシュ
 
 ### デプロイ手順
 
 ```bash
-# 1. 前提: AWS CLI設定済み、Node.js 18+
+# 1. AWS CLI設定済み、Node.js 18+
 aws configure
 
-# 2. パッケージング & デプロイ（ワンコマンド）
+# 2. パッケージング & デプロイ
 npm run cdk:deploy
 
 # 3. OpenAI APIキーを設定
 aws secretsmanager put-secret-value \
   --secret-id e-gov-search/openai-api-key \
   --secret-string "sk-your-openai-api-key"
-```
 
-デプロイ完了後、CloudFront URLが出力されます。
+# 4. WebSocket URLをフロントに設定（出力されたURLを環境変数に）
+# NEXT_PUBLIC_WEBSOCKET_URL=wss://xxx.execute-api.ap-northeast-1.amazonaws.com/prod
+```
 
 ### 削除
 
@@ -155,11 +175,39 @@ aws secretsmanager put-secret-value \
 npm run cdk:destroy
 ```
 
-### なぜこの構成？
+## プロジェクト構成
 
-- **Lambda Function URL** を採用: SSE（Server-Sent Events）ストリーミングをネイティブサポート。API Gateway は29秒タイムアウト制限があるため不適。
-- **CloudFront + S3**: 静的アセットを高速配信しつつ、Lambda の負荷を軽減。
-- **Secrets Manager**: APIキーをコードや環境変数に直接書かず安全に管理。
+```
+src/                            # Next.js フロントエンド
+├── app/
+│   ├── api/search/route.ts     # SSEフォールバック（ローカル開発用）
+│   ├── api/egov/route.ts       # e-Gov APIプロキシ（ローカル開発用）
+│   └── page.tsx                # メインページ
+├── components/                 # UI コンポーネント
+├── lib/
+│   ├── use-search.ts           # WebSocket + SSEフォールバック Hook
+│   ├── egov-api.ts             # e-Gov API クライアント
+│   └── search-engine.ts        # AI探索エンジン（ローカル用）
+└── types/                      # 型定義
+
+lambda/                         # AWS Lambda 関数群
+├── shared/                     # 共有ユーティリティ（Layer）
+│   ├── egov-api.mjs            # e-Gov API クライアント
+│   ├── openai-client.mjs       # OpenAI API クライアント
+│   └── ws-notify.mjs           # WebSocket通知
+├── connect/                    # WebSocket接続
+├── disconnect/                 # WebSocket切断
+├── start-search/               # 検索開始→Step Functions起動
+├── analyze-query/              # Phase 1: クエリ分析
+├── search-laws/                # Phase 2: 法令検索（並列）
+├── select-laws/                # Phase 3: 関連度判定
+├── read-articles/              # Phase 4: 条文深掘り（並列）
+└── generate-conclusion/        # Phase 5: 結論生成
+
+cdk/                            # AWS CDK
+├── lib/e-gov-search-stack.ts   # メインスタック
+└── bin/app.ts                  # エントリポイント
+```
 
 ## ライセンス
 

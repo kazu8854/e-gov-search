@@ -9,7 +9,8 @@
     "lint": "next lint",
     "package": "bash scripts/package-lambda.sh",
     "cdk:deploy": "npm run package && cd cdk && npm install && npx cdk deploy --require-approval never",
-    "cdk:destroy": "cd cdk && npx cdk destroy --force"
+    "cdk:destroy": "cd cdk && npx cdk destroy --force",
+    "build:static": "STATIC_EXPORT=true next build"
   },
   "dependencies": {
     "next": "^15.3.3",
