@@ -48,6 +48,7 @@ export function SearchInput({ onSearch, isSearching }: SearchInputProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="法律について知りたいことを入力してください..."
+            maxLength={500}
             className="w-full px-5 py-4 pr-14 rounded-2xl bg-[var(--card)] border border-[var(--card-border)] text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition-all text-lg"
             disabled={isSearching}
           />

@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { Scale, ExternalLink, Lightbulb, BookOpen } from "lucide-react";
 import type { ConclusionData } from "@/types";
 
@@ -22,12 +23,9 @@ export function Conclusion({ data }: ConclusionProps) {
       {/* Summary */}
       <div className="rounded-2xl bg-[var(--card)] border border-[var(--card-border)] p-6 mb-4">
         <div className="prose prose-invert prose-sm max-w-none">
-          <div
-            className="text-sm leading-relaxed text-[var(--foreground)]"
-            dangerouslySetInnerHTML={{
-              __html: formatMarkdown(data.summary),
-            }}
-          />
+          <div className="text-sm leading-relaxed text-[var(--foreground)] whitespace-pre-wrap">
+            {renderMarkdownSafe(data.summary)}
+          </div>
         </div>
       </div>
 
@@ -118,14 +116,68 @@ export function Conclusion({ data }: ConclusionProps) {
   );
 }
 
-function formatMarkdown(text: string): string {
-  if (!text) return "";
-  return text
-    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.*?)\*/g, "<em>$1</em>")
-    .replace(/`(.*?)`/g, '<code class="px-1 py-0.5 rounded bg-black/30">$1</code>')
-    .replace(/\n\n/g, "</p><p>")
-    .replace(/\n/g, "<br />")
-    .replace(/^/, "<p>")
-    .replace(/$/, "</p>");
+/**
+ * Markdownテキストを安全にReact要素に変換（dangerouslySetInnerHTML不使用）
+ * XSS防止: HTMLタグは一切解釈せず、テキストとして扱う
+ */
+function renderMarkdownSafe(text: string): React.ReactNode {
+  if (!text) return null;
+
+  const paragraphs = text.split(/\n\n+/);
+  return paragraphs.map((para, pIdx) => {
+    const lines = para.split(/\n/);
+    const lineElements = lines.map((line, lIdx) => {
+      // インライン: **bold**, *italic*, `code` をReact要素に変換
+      const parts: React.ReactNode[] = [];
+      let remaining = line;
+      let key = 0;
+
+      while (remaining.length > 0) {
+        // **bold**
+        const boldMatch = remaining.match(/^(.*?)\*\*(.+?)\*\*(.*)/s);
+        if (boldMatch) {
+          if (boldMatch[1]) parts.push(boldMatch[1]);
+          parts.push(<strong key={`b${key++}`}>{boldMatch[2]}</strong>);
+          remaining = boldMatch[3];
+          continue;
+        }
+        // *italic*
+        const italicMatch = remaining.match(/^(.*?)\*(.+?)\*(.*)/s);
+        if (italicMatch) {
+          if (italicMatch[1]) parts.push(italicMatch[1]);
+          parts.push(<em key={`i${key++}`}>{italicMatch[2]}</em>);
+          remaining = italicMatch[3];
+          continue;
+        }
+        // `code`
+        const codeMatch = remaining.match(/^(.*?)`(.+?)`(.*)/s);
+        if (codeMatch) {
+          if (codeMatch[1]) parts.push(codeMatch[1]);
+          parts.push(
+            <code key={`c${key++}`} className="px-1 py-0.5 rounded bg-black/30 text-xs">
+              {codeMatch[2]}
+            </code>
+          );
+          remaining = codeMatch[3];
+          continue;
+        }
+        // 残りのテキスト
+        parts.push(remaining);
+        break;
+      }
+
+      return (
+        <React.Fragment key={`l${pIdx}-${lIdx}`}>
+          {parts}
+          {lIdx < lines.length - 1 && <br />}
+        </React.Fragment>
+      );
+    });
+
+    return (
+      <p key={`p${pIdx}`} className="mb-2 last:mb-0">
+        {lineElements}
+      </p>
+    );
+  });
 }
