@@ -90,22 +90,14 @@ export async function runSearch(query: string, emit: EmitFn): Promise<void> {
         kwStep.results = hits.map((h) => ({
           lawTitle: h.law_title,
           lawId: h.law_id,
-          excerpt: h.text_snippet,
         }));
-        kwStep.detail = `${hits.length}件の条文がヒット`;
+        kwStep.detail = `${hits.length}件の法令がヒット`;
         emit("step", kwStep);
 
         for (const hit of hits) {
           if (!allResults.has(hit.law_id)) {
-            // 概要情報を作成
             allResults.set(hit.law_id, {
-              law: {
-                law_id: hit.law_id,
-                law_title: hit.law_title,
-                law_num: hit.law_num,
-                law_type: hit.law_type,
-                promulgate_date: "",
-              },
+              law: hit,
               relevance: keyword,
             });
           }
