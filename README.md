@@ -109,6 +109,58 @@ src/
     └── index.ts               # 型定義
 ```
 
+## AWSサーバレスデプロイ（CDK）
+
+AWS CDKを使って完全サーバレスで本番デプロイできます。
+
+### アーキテクチャ
+
+```
+ユーザー
+  ↓
+CloudFront（CDN + HTTPS）
+  ├── /_next/static/* → S3バケット（静的アセット）
+  └── /* → Lambda Function URL（Next.js SSR + API）
+              ↓
+          Secrets Manager（OPENAI_API_KEY）
+```
+
+| リソース | 用途 |
+|----------|------|
+| CloudFront | CDN配信、HTTPS、セキュリティヘッダー |
+| S3 | 静的アセット（JS/CSS）配信 |
+| Lambda Function URL | Next.js SSR & APIハンドラー（SSEストリーミング対応） |
+| Secrets Manager | OpenAI APIキーの安全な管理 |
+
+### デプロイ手順
+
+```bash
+# 1. 前提: AWS CLI設定済み、Node.js 18+
+aws configure
+
+# 2. パッケージング & デプロイ（ワンコマンド）
+npm run cdk:deploy
+
+# 3. OpenAI APIキーを設定
+aws secretsmanager put-secret-value \
+  --secret-id e-gov-search/openai-api-key \
+  --secret-string "sk-your-openai-api-key"
+```
+
+デプロイ完了後、CloudFront URLが出力されます。
+
+### 削除
+
+```bash
+npm run cdk:destroy
+```
+
+### なぜこの構成？
+
+- **Lambda Function URL** を採用: SSE（Server-Sent Events）ストリーミングをネイティブサポート。API Gateway は29秒タイムアウト制限があるため不適。
+- **CloudFront + S3**: 静的アセットを高速配信しつつ、Lambda の負荷を軽減。
+- **Secrets Manager**: APIキーをコードや環境変数に直接書かず安全に管理。
+
 ## ライセンス
 
 MIT

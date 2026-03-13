@@ -6,14 +6,18 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "package": "bash scripts/package-lambda.sh",
+    "cdk:deploy": "npm run package && cd cdk && npm install && npx cdk deploy --require-approval never",
+    "cdk:destroy": "cd cdk && npx cdk destroy --force"
   },
   "dependencies": {
     "next": "^15.3.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "openai": "^4.103.0",
-    "lucide-react": "^0.511.0"
+    "lucide-react": "^0.511.0",
+    "@aws-sdk/client-secrets-manager": "^3.800.0"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
