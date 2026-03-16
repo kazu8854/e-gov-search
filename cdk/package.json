@@ -1,0 +1,19 @@
+{
+  "name": "e-gov-search-cdk",
+  "version": "0.1.0",
+  "bin": {
+    "cdk": "bin/app.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "cdk": "cdk"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.175.0",
+    "constructs": "^10.4.0"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.0",
+    "aws-cdk": "^2.175.0"
+  }
+}

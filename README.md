@@ -86,13 +86,52 @@ npm run dev
 - [nekogohanoishi/law-jp-mcp](https://github.com/nekogohanoishi/law-jp-mcp) — LLM最適化、Vercel対応（TypeScript/npx）
 - [takurot/egov-law-mcp](https://github.com/takurot/egov-law-mcp) — シンプル、PyPI公開済み（Python/uvx）
 
+## AWSデプロイ（CDK）
+
+本番環境はAWS上にサーバーレスで構築可能です。
+
+### アーキテクチャ
+
+```
+ブラウザ → CloudFront → S3（静的フロントエンド）
+    ↓ POST /search
+API Gateway → Lambda（start-search）→ Step Functions
+    ↓ WebSocket
+AppSync Event API ← Lambda群（analyze → search → select → read → conclude）
+```
+
+- **Step Functions**: 探索ワークフローのオーケストレーション
+- **AppSync Event API**: リアルタイムイベント配信（WebSocket）
+- **Lambda × 6**: 各フェーズのワーカー
+- **Secrets Manager**: OpenAI APIキーの安全な管理
+
+### デプロイ手順
+
+```bash
+# 1. フロントエンドの静的ビルド
+bash scripts/build-static.sh
+
+# 2. CDKデプロイ
+cd cdk
+npm install
+npx cdk deploy
+
+# 3. OpenAI APIキーをSecrets Managerに設定
+aws secretsmanager put-secret-value \
+  --secret-id e-gov-search/openai-api-key \
+  --secret-string "sk-your-api-key"
+
+# 4. デプロイ出力のURLでフロントエンド環境変数を設定
+#    NEXT_PUBLIC_APPSYNC_REALTIME_ENDPOINT, NEXT_PUBLIC_APPSYNC_API_KEY, NEXT_PUBLIC_REST_API_URL
+```
+
 ## プロジェクト構成
 
 ```
 src/
 ├── app/
 │   ├── api/
-│   │   ├── search/route.ts    # SSEストリーミングAPI
+│   │   ├── search/route.ts    # SSEストリーミングAPI（ローカル開発用）
 │   │   └── egov/route.ts      # e-Gov APIプロキシ
 │   ├── globals.css
 │   ├── layout.tsx
@@ -103,10 +142,27 @@ src/
 │   └── Conclusion.tsx         # 結論表示
 ├── lib/
 │   ├── egov-api.ts            # e-Gov法令APIクライアント
-│   ├── search-engine.ts       # AI探索エンジン
-│   └── use-search.ts          # React Hook（SSE受信）
+│   ├── search-engine.ts       # AI探索エンジン（SSE版）
+│   ├── rate-limit.ts          # レート制限
+│   └── use-search.ts          # React Hook（SSE / AppSync自動切替）
 └── types/
     └── index.ts               # 型定義
+
+lambda/                        # AWS Lambda関数群
+├── shared/                    # 共通ライブラリ
+│   ├── egov-api.mjs           # e-Gov APIクライアント
+│   ├── openai-client.mjs      # OpenAIクライアント（Secrets Manager連携）
+│   └── appsync-publish.mjs    # AppSync Event API パブリッシュ
+├── start-search/              # REST API → Step Functions開始
+├── analyze-query/             # Phase 1: クエリ分析
+├── search-laws/               # Phase 2: 法令検索（並列）
+├── select-laws/               # Phase 3: 関連度判定
+├── read-articles/             # Phase 4: 条文深掘り（並列）
+└── generate-conclusion/       # Phase 5: 結論生成
+
+cdk/                           # AWS CDKインフラ定義
+├── lib/e-gov-search-stack.ts
+└── bin/app.ts
 ```
 
 ## ライセンス
