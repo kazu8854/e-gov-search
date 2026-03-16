@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
+const isStaticExport = process.env.NEXT_BUILD_MODE === "export";
+
 const nextConfig: NextConfig = {
+  // 静的エクスポート: CDKデプロイ用（S3 + CloudFront）
+  ...(isStaticExport ? { output: "export" } : {}),
   async headers() {
     return [
       {
@@ -34,7 +38,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https:",
               "font-src 'self'",
-              "connect-src 'self' https://laws.e-gov.go.jp",
+              "connect-src 'self' https://laws.e-gov.go.jp https://*.amazonaws.com wss://*.amazonaws.com https://*.appsync-api.*.amazonaws.com wss://*.appsync-realtime-api.*.amazonaws.com",
               "frame-ancestors 'none'",
             ].join("; "),
           },
