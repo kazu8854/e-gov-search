@@ -4,14 +4,38 @@ import { SearchInput } from "@/components/SearchInput";
 import { SearchProcess } from "@/components/SearchProcess";
 import { Conclusion } from "@/components/Conclusion";
 import { useSearch } from "@/lib/use-search";
-import { AlertCircle, RotateCcw } from "lucide-react";
+import { AlertCircle, RotateCcw, Wifi, WifiOff } from "lucide-react";
 
 export default function Home() {
-  const { steps, conclusion, isSearching, error, search, reset } = useSearch();
+  const { steps, conclusion, isSearching, error, isConnected, search, reset } =
+    useSearch();
+
+  const hasAppSync = !!process.env.NEXT_PUBLIC_APPSYNC_REALTIME_ENDPOINT;
 
   return (
     <main className="min-h-screen px-4 py-12 max-w-4xl mx-auto">
       <SearchInput onSearch={search} isSearching={isSearching} />
+
+      {/* 接続状態表示（AppSync設定時のみ） */}
+      {hasAppSync && isSearching && (
+        <div className="w-full max-w-3xl mx-auto mt-2 flex justify-center">
+          <span
+            className={`text-xs flex items-center gap-1 ${
+              isConnected ? "text-green-400" : "text-[var(--muted)]"
+            }`}
+          >
+            {isConnected ? (
+              <>
+                <Wifi className="w-3 h-3" /> AppSync Event API 接続中
+              </>
+            ) : (
+              <>
+                <WifiOff className="w-3 h-3" /> 接続待機中...
+              </>
+            )}
+          </span>
+        </div>
+      )}
 
       {error && (
         <div className="w-full max-w-3xl mx-auto mt-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-start gap-3">
@@ -66,6 +90,10 @@ export default function Home() {
           >
             OpenAI
           </a>
+          {" "}+{" "}
+          <span className="text-[var(--muted)]">
+            AWS AppSync Events + Step Functions
+          </span>
         </p>
       </footer>
     </main>
