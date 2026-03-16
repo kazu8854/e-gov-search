@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:export": "bash scripts/build-static.sh",
     "start": "next start",
     "lint": "next lint"
   },
