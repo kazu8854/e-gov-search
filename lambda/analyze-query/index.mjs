@@ -2,7 +2,7 @@
  * Phase 1: クエリ分析 Lambda
  * 自然言語の質問からキーワードを抽出する
  */
-import { chatCompletion } from "../shared/openai-client.mjs";
+import { chatCompletion } from "../shared/bedrock-client.mjs";
 import { sendStep } from "../shared/appsync-publish.mjs";
 
 export async function handler(event) {
@@ -14,7 +14,7 @@ export async function handler(event) {
   });
 
   const result = await chatCompletion({
-    model: "gpt-4o-mini",
+    model: "light",
     temperature: 0,
     jsonMode: true,
     messages: [

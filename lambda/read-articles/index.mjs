@@ -2,7 +2,7 @@
  * Phase 4: 条文深掘り Lambda（法令ごとに並列実行）
  */
 import { getLawContent, getArticle, getLawToc } from "../shared/egov-api.mjs";
-import { chatCompletion } from "../shared/openai-client.mjs";
+import { chatCompletion } from "../shared/bedrock-client.mjs";
 import { sendStep } from "../shared/appsync-publish.mjs";
 
 export async function handler(event) {
@@ -35,7 +35,7 @@ export async function handler(event) {
     const lawContent = await getLawContent(law.lawId);
 
     const result = await chatCompletion({
-      model: "gpt-4o-mini",
+      model: "light",
       temperature: 0,
       jsonMode: true,
       messages: [

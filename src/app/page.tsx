@@ -59,12 +59,12 @@ export default function Home() {
           </a>
           {" "}+{" "}
           <a
-            href="https://openai.com"
+            href="https://aws.amazon.com/bedrock/"
             target="_blank"
             rel="noopener noreferrer"
             className="text-[var(--accent)] hover:underline"
           >
-            OpenAI
+            Amazon Bedrock (Claude)
           </a>
         </p>
       </footer>

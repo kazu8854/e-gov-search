@@ -2,7 +2,7 @@
  * Phase 3: 関連度判定 Lambda
  * AIで検索結果から最も関連する法令を選別
  */
-import { chatCompletion } from "../shared/openai-client.mjs";
+import { chatCompletion } from "../shared/bedrock-client.mjs";
 import { sendStep } from "../shared/appsync-publish.mjs";
 
 export async function handler(event) {
@@ -41,7 +41,7 @@ export async function handler(event) {
     .join("\n");
 
   const result = await chatCompletion({
-    model: "gpt-4o-mini",
+    model: "light",
     temperature: 0,
     jsonMode: true,
     messages: [

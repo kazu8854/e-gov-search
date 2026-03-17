@@ -5,7 +5,7 @@ import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-// /api/search: 1分間に5回まで（OpenAI APIコスト保護）
+// /api/search: 1分間に5回まで（Bedrock APIコスト保護）
 const SEARCH_RATE_LIMIT = { windowMs: 60_000, maxRequests: 5 };
 
 export async function POST(req: NextRequest) {
@@ -40,16 +40,6 @@ export async function POST(req: NextRequest) {
       JSON.stringify({ error: "質問は500文字以内で入力してください" }),
       {
         status: 400,
-        headers: { "Content-Type": "application/json" },
-      }
-    );
-  }
-
-  if (!process.env.OPENAI_API_KEY) {
-    return new Response(
-      JSON.stringify({ error: "OPENAI_API_KEY is not configured" }),
-      {
-        status: 500,
         headers: { "Content-Type": "application/json" },
       }
     );

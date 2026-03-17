@@ -4,7 +4,6 @@ import * as s3deploy from "aws-cdk-lib/aws-s3-deployment";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as lambda from "aws-cdk-lib/aws-lambda";
-import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as appsync from "aws-cdk-lib/aws-appsync";
@@ -18,13 +17,7 @@ export class EGovSearchStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // ================================
-    // Secrets Manager: OpenAI API Key
-    // ================================
-    const openaiSecret = new secretsmanager.Secret(this, "OpenAIApiKey", {
-      secretName: "e-gov-search/openai-api-key",
-      description: "OpenAI API Key for 法令探索AI",
-    });
+    const bedrockRegion = this.node.tryGetContext("bedrockRegion") || "us-east-1";
 
     // ================================
     // AppSync Event API
@@ -62,7 +55,6 @@ export class EGovSearchStack extends cdk.Stack {
     // ================================
     // Lambda 共通設定
     // ================================
-    // 全Lambda関数をlambda/ディレクトリ全体からバンドル（shared/を含める）
     const lambdaCodeAsset = lambda.Code.fromAsset(
       path.join(__dirname, "../../lambda")
     );
@@ -79,9 +71,20 @@ export class EGovSearchStack extends cdk.Stack {
     const appsyncRealtimeEndpoint = eventApi.realtimeDns;
 
     const aiLambdaEnv = {
-      OPENAI_SECRET_ARN: openaiSecret.secretArn,
+      BEDROCK_REGION: bedrockRegion,
+      CLAUDE_MODEL_ID: "anthropic.claude-sonnet-4-20250514",
+      CLAUDE_LIGHT_MODEL_ID: "anthropic.claude-haiku-4-20250514",
       APPSYNC_HTTP_ENDPOINT: `https://${appsyncHttpEndpoint}/event`,
     };
+
+    // Bedrock InvokeModel IAMポリシー
+    const bedrockPolicy = new iam.PolicyStatement({
+      actions: ["bedrock:InvokeModel"],
+      resources: [
+        `arn:aws:bedrock:${bedrockRegion}::foundation-model/anthropic.claude-sonnet-4-20250514`,
+        `arn:aws:bedrock:${bedrockRegion}::foundation-model/anthropic.claude-haiku-4-20250514`,
+      ],
+    });
 
     // ================================
     // Lambda: 探索ワーカー群
@@ -92,7 +95,7 @@ export class EGovSearchStack extends cdk.Stack {
       timeout: cdk.Duration.minutes(2),
       handler: "analyze-query/index.handler",
       environment: aiLambdaEnv,
-      description: "Phase 1: クエリ分析",
+      description: "Phase 1: クエリ分析 (Bedrock Claude)",
     });
 
     const searchLawsFn = new lambda.Function(this, "SearchLawsFn", {
@@ -110,7 +113,7 @@ export class EGovSearchStack extends cdk.Stack {
       timeout: cdk.Duration.minutes(2),
       handler: "select-laws/index.handler",
       environment: aiLambdaEnv,
-      description: "Phase 3: 関連度判定",
+      description: "Phase 3: 関連度判定 (Bedrock Claude)",
     });
 
     const readArticlesFn = new lambda.Function(this, "ReadArticlesFn", {
@@ -119,7 +122,7 @@ export class EGovSearchStack extends cdk.Stack {
       timeout: cdk.Duration.minutes(3),
       handler: "read-articles/index.handler",
       environment: aiLambdaEnv,
-      description: "Phase 4: 条文深掘り（並列実行）",
+      description: "Phase 4: 条文深掘り (Bedrock Claude)",
     });
 
     const generateConclusionFn = new lambda.Function(this, "GenerateConclusionFn", {
@@ -128,15 +131,16 @@ export class EGovSearchStack extends cdk.Stack {
       timeout: cdk.Duration.minutes(3),
       handler: "generate-conclusion/index.handler",
       environment: aiLambdaEnv,
-      description: "Phase 5: 結論生成",
+      description: "Phase 5: 結論生成 (Bedrock Claude)",
     });
 
-    // Secrets Manager読み取り権限
-    for (const fn of [analyzeQueryFn, selectLawsFn, readArticlesFn, generateConclusionFn]) {
-      openaiSecret.grantRead(fn);
+    // Bedrock InvokeModel権限を付与（AI Lambda群）
+    const aiLambdas = [analyzeQueryFn, selectLawsFn, readArticlesFn, generateConclusionFn];
+    for (const fn of aiLambdas) {
+      fn.addToRolePolicy(bedrockPolicy);
     }
 
-    // AppSync Event API publish権限（IAM認証）
+    // AppSync Event API publish権限（全Lambda）
     const allWorkerLambdas = [analyzeQueryFn, searchLawsFn, selectLawsFn, readArticlesFn, generateConclusionFn];
     for (const fn of allWorkerLambdas) {
       fn.addToRolePolicy(
@@ -300,9 +304,9 @@ export class EGovSearchStack extends cdk.Stack {
     new cdk.CfnOutput(this, "AppSyncRealtimeEndpoint", {
       value: `wss://${appsyncRealtimeEndpoint}`,
     });
-    new cdk.CfnOutput(this, "OpenAISecretArn", {
-      value: openaiSecret.secretArn,
-      description: "OpenAI APIキーのSecrets Manager ARN（要手動設定）",
+    new cdk.CfnOutput(this, "BedrockRegion", {
+      value: bedrockRegion,
+      description: "Bedrock Claude のリージョン",
     });
   }
 }

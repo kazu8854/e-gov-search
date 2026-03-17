@@ -1,7 +1,7 @@
 /**
  * Phase 5: 結論生成 Lambda
  */
-import { chatCompletion } from "../shared/openai-client.mjs";
+import { chatCompletion } from "../shared/bedrock-client.mjs";
 import { sendConclusion, sendDone } from "../shared/appsync-publish.mjs";
 import { sendStep } from "../shared/appsync-publish.mjs";
 
@@ -27,7 +27,7 @@ export async function handler(event) {
     .join("\n\n---\n\n");
 
   const result = await chatCompletion({
-    model: "gpt-4o",
+    model: "heavy",
     temperature: 0.3,
     jsonMode: true,
     messages: [

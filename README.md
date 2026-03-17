@@ -5,11 +5,12 @@
 ![法令探索AI](https://img.shields.io/badge/Next.js-15-black?style=flat&logo=next.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=flat&logo=typescript)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38bdf8?style=flat&logo=tailwindcss)
+![Amazon Bedrock](https://img.shields.io/badge/Bedrock-Claude-orange?style=flat&logo=amazonaws)
 
 ## 特徴
 
 - 🔍 **自然言語検索** — 「残業代未払いの場合どうなる？」のように普通の日本語で質問
-- 🧠 **AI多段階探索** — GPT-4oがクエリを分析し、関連法令を芋づる式に探索
+- 🧠 **AI多段階探索** — Amazon Bedrock (Claude) がクエリを分析し、関連法令を芋づる式に探索
 - 📡 **リアルタイム可視化** — Server-Sent Events（SSE）で探索プロセスをストリーミング表示
   - キーワード抽出 → 法令検索 → 条文読み取り → 参照先追跡 → 結論まとめ
 - 📋 **結論レポート** — 関連法令・条文を整理し、重要ポイントとともに提示
@@ -20,15 +21,15 @@
 ```
 ユーザー入力: 「残業代未払いについて」
     ↓
-🧠 AI分析: キーワード「労働基準法」「賃金」を抽出
+🧠 AI分析（Claude Haiku）: キーワード「労働基準法」「賃金」を抽出
     ↓
 🔍 法令検索: e-Gov APIで「労働基準法」を検索
     ↓
-📖 条文読取: 第37条（時間外労働の割増賃金）を特定
+📖 条文読取（Claude Haiku）: 第37条（時間外労働の割増賃金）を特定
     ↓
 🔗 参照追跡: 労働基準法施行規則も確認
     ↓
-📋 結論まとめ: 関連条文と解説を整理して提示
+📋 結論まとめ（Claude Sonnet）: 関連条文と解説を整理して提示
 ```
 
 ## セットアップ
@@ -36,7 +37,8 @@
 ### 前提条件
 
 - Node.js 18+
-- OpenAI API キー
+- AWS アカウント（Bedrock Claude のモデルアクセスを有効化済み）
+- AWS CLI 設定済み、または IAM 認証情報
 
 ### インストール
 
@@ -52,11 +54,18 @@ npm install
 cp .env.example .env.local
 ```
 
-`.env.local` を編集して OpenAI API キーを設定：
+`.env.local` を編集:
 
 ```
-OPENAI_API_KEY=sk-your-api-key-here
+# Bedrockリージョン（Claude が有効化されたリージョン）
+BEDROCK_REGION=us-east-1
+
+# モデルID（デフォルト値を使う場合は設定不要）
+# CLAUDE_MODEL_ID=anthropic.claude-sonnet-4-20250514
+# CLAUDE_LIGHT_MODEL_ID=anthropic.claude-haiku-4-20250514
 ```
+
+> **Note:** AWS認証情報は `~/.aws/credentials` や環境変数 `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` で設定してください。
 
 ### 開発サーバー起動
 
@@ -73,7 +82,7 @@ npm run dev
 | [Next.js 15](https://nextjs.org/) (App Router) | フレームワーク |
 | [TypeScript](https://www.typescriptlang.org/) | 型安全 |
 | [Tailwind CSS v4](https://tailwindcss.com/) | スタイリング |
-| [OpenAI API](https://platform.openai.com/) (GPT-4o) | AI探索エンジン |
+| [Amazon Bedrock](https://aws.amazon.com/bedrock/) (Claude Sonnet / Haiku) | AI探索エンジン |
 | [e-Gov法令API v2](https://laws.e-gov.go.jp/apidoc/) | 法令データ |
 | [Server-Sent Events](https://developer.mozilla.org/docs/Web/API/Server-sent_events) | リアルタイムストリーミング |
 | [Lucide React](https://lucide.dev/) | アイコン |
@@ -98,12 +107,14 @@ npm run dev
 API Gateway → Lambda（start-search）→ Step Functions
     ↓ WebSocket
 AppSync Event API ← Lambda群（analyze → search → select → read → conclude）
+                     ↓ AI推論
+                     Amazon Bedrock (Claude Sonnet / Haiku)
 ```
 
 - **Step Functions**: 探索ワークフローのオーケストレーション
 - **AppSync Event API**: リアルタイムイベント配信（WebSocket）
 - **Lambda × 6**: 各フェーズのワーカー
-- **Secrets Manager**: OpenAI APIキーの安全な管理
+- **Amazon Bedrock**: Claude Sonnet（結論生成）/ Haiku（軽量タスク）— APIキー管理不要
 
 ### デプロイ手順
 
@@ -111,19 +122,16 @@ AppSync Event API ← Lambda群（analyze → search → select → read → con
 # 1. フロントエンドの静的ビルド
 bash scripts/build-static.sh
 
-# 2. CDKデプロイ
+# 2. CDKデプロイ（Bedrockリージョンを指定可能）
 cd cdk
 npm install
-npx cdk deploy
+npx cdk deploy -c bedrockRegion=us-east-1
 
-# 3. OpenAI APIキーをSecrets Managerに設定
-aws secretsmanager put-secret-value \
-  --secret-id e-gov-search/openai-api-key \
-  --secret-string "sk-your-api-key"
-
-# 4. デプロイ出力のURLでフロントエンド環境変数を設定
+# 3. デプロイ出力のURLでフロントエンド環境変数を設定
 #    NEXT_PUBLIC_APPSYNC_REALTIME_ENDPOINT, NEXT_PUBLIC_APPSYNC_API_KEY, NEXT_PUBLIC_REST_API_URL
 ```
+
+> **Note:** Secrets ManagerやAPIキー設定は不要です。Lambda関数はIAMロール経由でBedrockを呼び出します。
 
 ## プロジェクト構成
 
@@ -142,7 +150,7 @@ src/
 │   └── Conclusion.tsx         # 結論表示
 ├── lib/
 │   ├── egov-api.ts            # e-Gov法令APIクライアント
-│   ├── search-engine.ts       # AI探索エンジン（SSE版）
+│   ├── search-engine.ts       # AI探索エンジン（Bedrock Claude版）
 │   ├── rate-limit.ts          # レート制限
 │   └── use-search.ts          # React Hook（SSE / AppSync自動切替）
 └── types/
@@ -151,14 +159,14 @@ src/
 lambda/                        # AWS Lambda関数群
 ├── shared/                    # 共通ライブラリ
 │   ├── egov-api.mjs           # e-Gov APIクライアント
-│   ├── openai-client.mjs      # OpenAIクライアント（Secrets Manager連携）
+│   ├── bedrock-client.mjs     # Bedrock Claudeクライアント（IAM認証）
 │   └── appsync-publish.mjs    # AppSync Event API パブリッシュ
 ├── start-search/              # REST API → Step Functions開始
-├── analyze-query/             # Phase 1: クエリ分析
+├── analyze-query/             # Phase 1: クエリ分析（Claude Haiku）
 ├── search-laws/               # Phase 2: 法令検索（並列）
-├── select-laws/               # Phase 3: 関連度判定
-├── read-articles/             # Phase 4: 条文深掘り（並列）
-└── generate-conclusion/       # Phase 5: 結論生成
+├── select-laws/               # Phase 3: 関連度判定（Claude Haiku）
+├── read-articles/             # Phase 4: 条文深掘り（Claude Haiku）
+└── generate-conclusion/       # Phase 5: 結論生成（Claude Sonnet）
 
 cdk/                           # AWS CDKインフラ定義
 ├── lib/e-gov-search-stack.ts
@@ -172,4 +180,4 @@ MIT
 ## 謝辞
 
 - [e-Gov 法令API v2](https://laws.e-gov.go.jp/apidoc/) — デジタル庁
-- [OpenAI](https://openai.com/)
+- [Amazon Bedrock](https://aws.amazon.com/bedrock/) — AWS
